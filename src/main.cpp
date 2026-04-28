@@ -1,27 +1,21 @@
-#include "sensors/HCSR04Module/HCSR04Module.h"
-#include "sensors/PMSA003Module/PMSA003Module.h"
-#include "sensors/RC522Module/RC522Module.h"
+#include <Arduino.h>
+#include "util/sensor_manager/sensor_manager.h"
+#include "util/mqtt_publisher/mqtt_publisher.h"
 
-HCSR04Module  hcsr(5, 18);
-PMSA003Module pms(16, 17);
-RC522Module   rfid(5, 22);
+static const char* WIFI_SSID  = "raspwifi";
+static const char* WIFI_PASS  = "12345678";
+static const char* MQTT_HOST  = "192.168.4.1";
 
 void setup() {
     Serial.begin(115200);
-    hcsr.begin();
-    pms.begin();
-    rfid.begin();
+    delay(1000);
+
+    sensor_manager::begin();
+    mqtt_publisher::begin(WIFI_SSID, WIFI_PASS, MQTT_HOST);
 }
 
 void loop() {
-    auto dist = hcsr.read();
-    if (dist.ok) Serial.printf("Odległość: %.1f cm\n", dist.dist_cm);
-
-    auto air = pms.read();
-    if (air.ok) Serial.printf("PM2.5: %d µg/m³\n", air.pm2_5);
-
-    auto card = rfid.read();
-    if (card.ok) Serial.printf("Karta: %s\n", card.uidString().c_str());
-
+    sensor_manager::tick();
+    mqtt_publisher::tick();
     delay(1000);
 }
