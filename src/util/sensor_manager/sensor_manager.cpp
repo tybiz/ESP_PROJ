@@ -14,25 +14,25 @@ Preferences sensor_manager::_prefs;
 
 // ── piny dla ESP32 DevKit V1 ──────────────────────────────────────────────────
 // SPI (wspólne dla RFID i BME680 — nie podłączaj jednocześnie!):
-//   SCK  -> GPIO18  (pin 30 na płytce, oznaczony SCK/CLK)
-//   MISO -> GPIO19  (pin 31, oznaczony MISO/SDO)
-//   MOSI -> GPIO23  (pin 37, oznaczony MOSI/SDI)
+//   SCK       -> GPIO18  (D18, pin 30)
+//   MISO/SDO  -> GPIO19  (D19, pin 31)
+//   MOSI/SDI  -> GPIO23  (D23, pin 37)
 //
 // RFID RC522:
-//   SDA(SS) -> GPIO15  (pin 23, oznaczony D15)
-//   RST     -> GPIO4   (pin 24, oznaczony D4)
+//   SDA(SS) -> GPIO15  (D15, pin 23)
+//   RST     -> GPIO4   (D4,  pin 24)
 //   GND     -> GND
 //   3.3V    -> 3V3
 //   IRQ     -> niepodłączony
 //
 // BME680 (SPI):
-//   CS      -> GPIO21  (pin 33, oznaczony D21)
+//   CS      -> GPIO21  (D21, pin 33)
 //   GND     -> GND
 //   3.3V    -> 3V3
 //
 // HC-SR04 Ultrasonic:
-//   TRIG    -> GPIO26  (pin 11, oznaczony D26)
-//   ECHO    -> GPIO27  (pin 12, oznaczony D27)
+//   TRIG    -> GPIO26  (D26, pin 11)
+//   ECHO    -> GPIO27  (D27, pin 12)
 //   VCC     -> VIN (5V) lub 3V3 (zależy od modułu)
 //   GND     -> GND
 // ─────────────────────────────────────────────────────────────────────────────

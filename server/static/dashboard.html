@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IoT Dashboard</title>
+    <script src="/lib/socket.io.min.js"></script>
+    <script src="/lib/chart.umd.min.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        :root {
+            --bg:     #0d1117;
+            --bg2:    #161b22;
+            --bg3:    #21262d;
+            --border: #30363d;
+            --text:   #e6edf3;
+            --muted:  #8b949e;
+            --green:  #3fb950;
+            --blue:   #58a6ff;
+            --amber:  #d29922;
+            --red:    #f85149;
+            --font:   'Courier New', monospace;
+        }
+        body { background: var(--bg); color: var(--text); font-family: var(--font); font-size: 13px; }
+        header {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 14px 24px; border-bottom: 1px solid var(--border); background: var(--bg2);
+        }
+        .logo { font-size: 14px; font-weight: 700; letter-spacing: 3px; color: var(--green); }
+        .status { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+        .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--red); transition: background 0.3s; }
+        .dot.on { background: var(--green); box-shadow: 0 0 6px var(--green); }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 14px; padding: 20px 24px; }
+        .card { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
+        .card-title { font-size: 10px; color: var(--muted); letter-spacing: 2px; text-transform: uppercase; margin-bottom: 14px; }
+        .values { display: flex; gap: 10px; margin-bottom: 14px; }
+        .val-box { flex: 1; background: var(--bg3); border-radius: 6px; padding: 10px 12px; }
+        .val-label { font-size: 10px; color: var(--muted); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 1px; }
+        .val-number { font-size: 26px; font-weight: 700; line-height: 1; }
+        .val-unit { font-size: 11px; color: var(--muted); margin-left: 2px; }
+        .chart-wrap { height: 130px; }
+        .rfid-entries { display: flex; flex-direction: column; gap: 5px; max-height: 200px; overflow-y: auto; }
+        .rfid-row { display: flex; justify-content: space-between; align-items: center; background: var(--bg3); border-radius: 5px; padding: 8px 12px; font-size: 12px; }
+        .rfid-uid { color: var(--amber); letter-spacing: 1px; }
+        .rfid-ts { color: var(--muted); font-size: 11px; }
+        .empty { color: var(--muted); font-size: 12px; padding: 8px 0; }
+    </style>
+</head>
+<body>
+
+<header>
+    <div class="logo">IOT / MONITOR</div>
+    <div class="status">
+        <div class="dot" id="dot"></div>
+        <span id="conn-label">disconnected</span>
+        <span style="margin-left:20px;color:var(--text)" id="last-ts">—</span>
+    </div>
+</header>
+
+<div class="grid">
+
+    <div class="card">
+        <div class="card-title">BME680 — environment</div>
+        <div class="values">
+            <div class="val-box">
+                <div class="val-label">temp</div>
+                <div class="val-number" id="bme-temp">—<span class="val-unit">°C</span></div>
+            </div>
+            <div class="val-box">
+                <div class="val-label">humidity</div>
+                <div class="val-number" id="bme-hum">—<span class="val-unit">%</span></div>
+            </div>
+            <div class="val-box">
+                <div class="val-label">pressure</div>
+                <div class="val-number" id="bme-pres">—<span class="val-unit">hPa</span></div>
+            </div>
+        </div>
+        <div class="chart-wrap"><canvas id="c-bme"></canvas></div>
+    </div>
+
+    <div class="card">
+        <div class="card-title">HC-SR04 — distance</div>
+        <div class="values">
+            <div class="val-box">
+                <div class="val-label">distance</div>
+                <div class="val-number" id="dist-cm">—<span class="val-unit">cm</span></div>
+            </div>
+            <div class="val-box">
+                <div class="val-label">distance</div>
+                <div class="val-number" id="dist-in">—<span class="val-unit">in</span></div>
+            </div>
+        </div>
+        <div class="chart-wrap"><canvas id="c-dist"></canvas></div>
+    </div>
+
+    <div class="card">
+        <div class="card-title">RFID — scan log</div>
+        <div class="rfid-entries" id="rfid-list">
+            <div class="empty">no scans yet</div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    const MAX = 60;
+
+    function mkChart(id, datasets) {
+        return new Chart(document.getElementById(id), {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: datasets.map(d => ({
+                    label: d.label, data: [],
+                    borderColor: d.color, backgroundColor: 'transparent',
+                    borderWidth: 1.5, pointRadius: 0, tension: 0.3
+                }))
+            },
+            options: {
+                animation: false, responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { labels: { color: '#8b949e', font: { size: 10, family: 'Courier New' }, boxWidth: 10 } } },
+                scales: {
+                    x: { ticks: { display: false }, grid: { color: '#21262d' } },
+                    y: { ticks: { color: '#8b949e', font: { size: 10 } }, grid: { color: '#21262d' } }
+                }
+            }
+        });
+    }
+
+    const charts = {
+        bme:  mkChart('c-bme',  [{ label: 'temp °C', color: '#f85149' }, { label: 'hum %', color: '#58a6ff' }]),
+        dist: mkChart('c-dist', [{ label: 'cm', color: '#3fb950' }]),
+    };
+
+    function pushChart(chart, values) {
+        chart.data.labels.push(new Date().toLocaleTimeString());
+        values.forEach((v, i) => chart.data.datasets[i].data.push(v));
+        if (chart.data.labels.length > MAX) {
+            chart.data.labels.shift();
+            chart.data.datasets.forEach(d => d.data.shift());
+        }
+        chart.update('none');
+    }
+
+    function setNum(id, value, decimals) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        const unit = el.querySelector('.val-unit');
+        const unitHTML = unit ? unit.outerHTML : '';
+        el.innerHTML = (value != null ? (+value).toFixed(decimals) : '—') + unitHTML;
+    }
+
+    function handle(d) {
+        document.getElementById('last-ts').textContent = new Date().toLocaleTimeString();
+
+        if (d.sensor === 'bme680') {
+            setNum('bme-temp', d.temperature, 1);
+            setNum('bme-hum',  d.humidity,    1);
+            setNum('bme-pres', d.pressure,    1);
+            pushChart(charts.bme, [d.temperature, d.humidity]);
+        }
+
+        if (d.sensor === 'ultrasonic') {
+            setNum('dist-cm', d.distance_cm, 1);
+            setNum('dist-in', d.distance_in, 2);
+            pushChart(charts.dist, [d.distance_cm]);
+        }
+
+        if (d.sensor === 'rfid' && d.card_present) {
+            const list = document.getElementById('rfid-list');
+            const empty = list.querySelector('.empty');
+            if (empty) empty.remove();
+            const row = document.createElement('div');
+            row.className = 'rfid-row';
+            row.innerHTML = '<span class="rfid-uid">' + d.uid + '</span><span class="rfid-ts">' + new Date().toLocaleTimeString() + '</span>';
+            list.prepend(row);
+            if (list.children.length > 30) list.lastChild.remove();
+        }
+    }
+
+    const socket = io();
+
+    socket.on('connect', () => {
+        document.getElementById('dot').className = 'dot on';
+        document.getElementById('conn-label').textContent = 'live';
+        ['bme680', 'ultrasonic', 'rfid'].forEach(s => {
+            fetch('/history/' + s).then(r => r.json()).then(({ data }) => data.forEach(d => handle(d)));
+        });
+    });
+
+    socket.on('disconnect', () => {
+        document.getElementById('dot').className = 'dot';
+        document.getElementById('conn-label').textContent = 'disconnected';
+    });
+
+    socket.on('update', handle);
+</script>
+</body>
+</html>
